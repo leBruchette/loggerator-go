@@ -3,50 +3,74 @@ package main
 import (
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/sirupsen/logrus"
 	"loggerator-go/reader"
+	"math"
 	"net/http"
 	"os"
-)
-
-var (
-	logDir     string
-	fileReader *reader.Reader
+	"strconv"
 )
 
 func main() {
-	// initialize app context
-	logDir = os.Getenv("LOG_DIR")
+	StartServer(createFileReader())
+}
+
+func createFileReader() *reader.Reader {
+	logDir := os.Getenv("LOG_DIR")
 	if logDir == "" {
 		logDir = "/var/log"
 	}
 
-	fileReader = reader.NewReader(logDir)
+	return reader.NewReader(logDir)
+}
 
+func StartServer(fileReader *reader.Reader) {
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-	r.Get("/logs", getLogsContent)
+	r.Get("/logs", createLogsHandler(fileReader))
 
 	logrus.Info("Server listening on port 8080...")
 	http.ListenAndServe(":8080", r)
 }
 
-func getLogsContent(w http.ResponseWriter, r *http.Request) {
-	//comma-separated list of file extensions to exclude
-	excludedFileTypes := r.URL.Query().Get("excludedFileTypes")
+func createLogsHandler(fileReader *reader.Reader) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// number of lines to read from the log file
+		linesToRead := parseLinesParameter(r)
+		// comma-separated list of file extensions to exclude
+		excludedFileTypes := r.URL.Query().Get("excludedFileTypes")
 
-	fileContents, err := fileReader.GetLogFileContent(5, excludedFileTypes)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		fileContents, err := fileReader.GetLogFileContent(linesToRead, excludedFileTypes)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		transformOutput(w, err, fileContents)
 	}
-
-	funcName(w, err, fileContents)
 }
 
-func funcName(w http.ResponseWriter, err error, fileContents map[string]reader.FileContent) {
+// parseLinesParameter parses the number of lines to read from the query parameter and returns the number of lines
+// to read.
+// If the query parameter is not provided or is invalid, the default number of lines to read is returned.
+// If the query parameter is -1, all lines are read.
+func parseLinesParameter(r *http.Request) int {
+	defaultLineCount := 20
+	var linesToRead int
+	linesQueryParm := r.URL.Query().Get("lines")
+	if len(linesQueryParm) == 0 {
+		linesToRead = defaultLineCount
+	} else if lines, err := strconv.Atoi(linesQueryParm); err != nil {
+		logrus.Warningf("Invalid number of lines to read: '%s', defaulting to %d", linesQueryParm, defaultLineCount)
+		linesToRead = defaultLineCount
+	} else if lines == -1 {
+		linesToRead = math.MaxInt
+	} else {
+		linesToRead = lines
+	}
+	return linesToRead
+}
+
+func transformOutput(w http.ResponseWriter, err error, fileContents map[string]reader.FileContent) {
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(fileContents)
 	if err != nil {

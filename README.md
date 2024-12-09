@@ -52,16 +52,23 @@ Retrieve log file contents.
 
 #### Query Parameters
 
+- `lines` (optional): Number of lines to read from each log file. 
+  - If not provided or invalid, defaults to 20. 
+  - If set to -1, all lines are read.
 - `excludedFileTypes` (optional): Comma-separated list of file extensions to exclude.
 
 #### Example
 
 ```sh
-curl "http://localhost:8080/logs?excludedFileTypes=.log,.txt"
+curl "http://localhost:8080/logs?lines=10&excludedFileTypes=.log,.txt"
 ```
 
 ## Testing
 Run the tests using the following command:
 ```sh
 go test ./...
+```
+Add `-cover` to generate a coverage report:
+```sh
+go test -cover ./...
 ```

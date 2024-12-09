@@ -15,7 +15,7 @@ import (
 )
 
 type FileContent struct {
-	Name     string    `json:"-"` // we'll map by dir+filename, exclude from JSON in response
+	Name     string    `json:"-"` // we'll map by Dir+filename, exclude from JSON in response
 	Size     int64     `json:"fileSizeBytes"`
 	Modified time.Time `json:"lastModified"`
 	Content  []string  `json:"content,omitempty"`
@@ -23,12 +23,12 @@ type FileContent struct {
 }
 
 type Reader struct {
-	dir string
+	Dir string
 }
 
 func NewReader(dir string) *Reader {
 	return &Reader{
-		dir: dir,
+		Dir: dir,
 	}
 }
 
@@ -57,7 +57,7 @@ func (r *Reader) GetLogFileContent(lineCount int, excluded string) (map[string]F
 	fileContents := make(chan FileContent)
 	var wg sync.WaitGroup
 
-	// filter out directories and known unreadable extensions (.gz etc)
+	// filter out directories and file extensions to exclude
 	for _, file := range fileInfos {
 		if !file.IsDir() && !isExcluded(filepath.Ext(file.Name()), excluded) {
 			// increment the number of goroutines to wait for
@@ -66,7 +66,7 @@ func (r *Reader) GetLogFileContent(lineCount int, excluded string) (map[string]F
 			// perform file manipulation within a goroutine
 			go func(file os.FileInfo) {
 				defer wg.Done()
-				path := filepath.Join(r.dir, file.Name())
+				path := filepath.Join(r.Dir, file.Name())
 				f, err := os.Open(path)
 				if err != nil {
 
@@ -96,13 +96,13 @@ func (r *Reader) GetLogFileContent(lineCount int, excluded string) (map[string]F
 
 	contents := make(map[string]FileContent)
 	for content := range fileContents {
-		contents[r.dir+"/"+content.Name] = content
+		contents[r.Dir+"/"+content.Name] = content
 	}
 	return contents, nil
 }
 
 func getFilesInDirectory(r *Reader) ([]os.FileInfo, error) {
-	entries, err := os.ReadDir(r.dir)
+	entries, err := os.ReadDir(r.Dir)
 	if err != nil {
 		logrus.Error(err)
 		return nil, err
@@ -143,23 +143,23 @@ func readLinesReverse(file *os.File, lineCount int) []string {
 	fileSize := stat.Size()
 	buffer := make([]byte, bufferSize)
 
-	// Read the first part of the file to check if it's human-readable
 	initialReadSize := bufferSize
 	if fileSize < int64(bufferSize) {
 		initialReadSize = int(fileSize)
 	}
 
+	// Fail fast if the file can't be read
 	_, err = file.ReadAt(buffer[:initialReadSize], 0)
 	if err != nil {
 		log.Fatalf("failed to read file: %v", err)
 	}
-
+	// Read the first part of the file to check if it's human-readable
+	// if not, return a slice with a relevant message
 	if !isHumanReadable(buffer[:initialReadSize]) {
 		return []string{"File is not human-readable"}
 	}
 
 	var lines []string
-
 	for offset := fileSize; offset > 0; {
 		toRead := int64(bufferSize)
 		if offset < bufferSize {
@@ -179,9 +179,8 @@ func readLinesReverse(file *os.File, lineCount int) []string {
 		}
 
 		scanner := bufio.NewScanner(bytes.NewReader(bufferText))
-		// Create a custom buffer size
+		// Create a 1MB slice to handle large lines
 		const maxCapacity = 1024 * 1024
-		// 1 MB buffer
 		buf := make([]byte, maxCapacity)
 		scanner.Buffer(buf, maxCapacity)
 
