@@ -3,6 +3,7 @@ package reader
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"os"
 	"testing"
 )
 
@@ -49,6 +50,15 @@ func Test_GetLogFileContent_HandlesEmptyDirectory(t *testing.T) {
 }
 
 func Test_GetLogFileContent_HandlesNonReadableFiles(t *testing.T) {
+	restrictedFilePath, err := createRestrictedFile(t)
+	require.NoError(t, err)
+
+	// Restore permissions and delete the file after the test
+	defer func() {
+		os.Chmod(restrictedFilePath, 0644)
+		os.Remove(restrictedFilePath)
+	}()
+
 	r := NewReader("testdata/restricted")
 	contents, err := r.GetLogFileContent(5, EXCLUDED_FILE_TYPES)
 	require.NoError(t, err)
@@ -58,8 +68,8 @@ func Test_GetLogFileContent_HandlesNonReadableFiles(t *testing.T) {
 	assert.Empty(t, contents["testdata/restricted/file.log"].Err)
 
 	// restricted file cannot be read/searched
-	assert.Equal(t, 0, len(contents["testdata/restricted/restricted.log"].Content))
-	assert.Contains(t, contents["testdata/restricted/restricted.log"].Err.Error(), "permission denied")
+	assert.Equal(t, 0, len(contents[restrictedFilePath].Content))
+	assert.Contains(t, contents[restrictedFilePath].Err.Error(), "permission denied")
 }
 
 func Test_GetLogFileContent_ErrorsOnNonExistentDirectory(t *testing.T) {
@@ -67,4 +77,15 @@ func Test_GetLogFileContent_ErrorsOnNonExistentDirectory(t *testing.T) {
 	_, err := r.GetLogFileContent(5, EXCLUDED_FILE_TYPES)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no such file or directory")
+}
+
+func createRestrictedFile(t *testing.T) (string, error) {
+	// Create a non-readable file
+	restrictedFilePath := "testdata/restricted/restricted.log"
+	err := os.WriteFile(restrictedFilePath, []byte("nobody will ever know..."), 0644)
+	require.NoError(t, err)
+	err = os.Chmod(restrictedFilePath, 0000)
+	require.NoError(t, err)
+
+	return restrictedFilePath, err
 }
