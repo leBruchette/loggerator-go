@@ -58,13 +58,12 @@ func TestMain(m *testing.M) {
 
 func Test_GetLogFileContent_ReturnsCorrectContent(t *testing.T) {
 	r := NewReader(LogFileDir)
-	contents, err := r.GetLogFileContent(5, EmptyExclusionList)
+	contents, err := r.GetLogFileContent(5, EmptyExclusionList, "")
 	require.NoError(t, err)
 
-	assert.Equal(t, 4, len(contents))
+	assert.Equal(t, 3, len(contents))
 	assert.True(t, contents[0].Modified.After(contents[1].Modified))
 	assert.True(t, contents[1].Modified.After(contents[2].Modified))
-	assert.True(t, contents[2].Modified.After(contents[3].Modified))
 	// testLogFile
 	assert.Equal(t, "testdata/file.log", contents[0].Name)
 	assert.Equal(t, 5, len(contents[0].Content))
@@ -77,28 +76,24 @@ func Test_GetLogFileContent_ReturnsCorrectContent(t *testing.T) {
 	assert.Equal(t, "testdata/file.log.gz", contents[1].Name)
 	assert.Equal(t, 1, len(contents[1].Content))
 	assert.Equal(t, "File is not human-readable", contents[1].Content[0])
-	// empty file,
-	assert.Equal(t, "testdata/empty.log", contents[2].Name)
-	assert.Equal(t, 0, len(contents[2].Content))
 	// restrictedLogFile
-	assert.Equal(t, "testdata/restricted.log", contents[3].Name)
-	assert.Equal(t, 0, len(contents[3].Content))
+	assert.Equal(t, "testdata/restricted.log", contents[2].Name)
+	assert.Equal(t, 0, len(contents[2].Content))
 }
 
 func Test_GetLogFileContent_ExcludesSpecifiedFileExtensions(t *testing.T) {
 	r := NewReader(LogFileDir)
-	contents, err := r.GetLogFileContent(-1, ".gz")
+	contents, err := r.GetLogFileContent(-1, ".gz", "")
 	require.NoError(t, err)
 
-	assert.Equal(t, 3, len(contents))
+	assert.Equal(t, 2, len(contents))
 	assert.Equal(t, contents[0].Name, "testdata/file.log")
-	assert.Equal(t, contents[1].Name, "testdata/empty.log")
-	assert.Equal(t, contents[2].Name, "testdata/restricted.log")
+	assert.Equal(t, contents[1].Name, "testdata/restricted.log")
 }
 
 func Test_GetLogFileContent_HandlesEmptyDirectory(t *testing.T) {
 	r := NewReader(emptyDirPath)
-	contents, err := r.GetLogFileContent(5, EmptyExclusionList)
+	contents, err := r.GetLogFileContent(5, EmptyExclusionList, "")
 	require.NoError(t, err)
 
 	assert.Empty(t, contents)
@@ -106,19 +101,19 @@ func Test_GetLogFileContent_HandlesEmptyDirectory(t *testing.T) {
 
 func Test_GetLogFileContent_HandlesNonReadableFiles(t *testing.T) {
 	r := NewReader(LogFileDir)
-	contents, err := r.GetLogFileContent(5, ".log")
+	contents, err := r.GetLogFileContent(5, ".log", "")
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, len(contents))
 	// gzipped file is not readable
 	assert.Equal(t, "testdata/file.log.gz", contents[0].Name)
 	assert.Equal(t, 1, len(contents[0].Content))
-	assert.Equal(t, "File is not human-readable", contents[0].Content[0])
+	assert.Equal(t, UnreadableFileMessage, contents[0].Content[0])
 }
 
 func Test_GetLogFileContent_ErrorsOnNonExistentDirectory(t *testing.T) {
 	r := NewReader("imnothere")
-	_, err := r.GetLogFileContent(5, EmptyExclusionList)
+	_, err := r.GetLogFileContent(5, EmptyExclusionList, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no such file or directory")
 }
