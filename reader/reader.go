@@ -209,10 +209,10 @@ func readLinesReverse(file *os.File, lineCount int, searchText string) ([]string
 
 		var tempLines []string
 		for scanner.Scan() {
-			//filter out empty lines
 			currLine := scanner.Text()
 			// Remove null characters from the line
 			currLineWithoutNullChar := strings.ReplaceAll(currLine, "\u0000", "")
+			//filter out empty lines
 			if nonBlankLineOrContainsSearchText(currLineWithoutNullChar, searchText) {
 				tempLines = append(tempLines, currLineWithoutNullChar)
 			}
