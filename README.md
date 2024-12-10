@@ -87,7 +87,7 @@ servers := []string{
     "ec2-3-145-104-182.us-east-2.compute.amazonaws.com",
 }
 ```
-Results are in a similar structure to the `/logs` endpoint, but wrapped in an object keyed by the servers' hostname
+Results are in a similar structure to the `/logs` endpoint, but wrapped in an object containing `hostname`
 
 ![managed-screenshot.png](readme/managed-screenshot.png)
 
