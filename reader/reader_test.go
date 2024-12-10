@@ -42,6 +42,7 @@ func teardown() {
 		os.Remove(emptyFilePath)
 		os.Chmod(restrictedFilePath, 0644)
 		os.Remove(restrictedFilePath)
+		os.Remove(emptyDirPath)
 		os.Remove(testDataDir)
 	}()
 }
