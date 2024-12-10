@@ -28,10 +28,17 @@ func createFileReader() *reader.Reader {
 
 func startServer(fileReader *reader.Reader) {
 	r := chi.NewRouter()
+	r.Get("/status", createStatusHandler())
 	r.Get("/logs", createLogsHandler(fileReader))
 
 	logrus.Info("Server listening on port 8080...")
 	http.ListenAndServe(":8080", r)
+}
+
+func createStatusHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}
 }
 
 func createLogsHandler(fileReader *reader.Reader) http.HandlerFunc {
