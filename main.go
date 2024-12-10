@@ -58,19 +58,21 @@ func createManagedLogsHandler() http.HandlerFunc {
 			"ec2-3-145-104-182.us-east-2.compute.amazonaws.com",
 		}
 
-		results := make([]*reader.ServerContent, len(servers))
-		var mu sync.Mutex
+		// channel for receiving results from the servers
+		resultsChan := make(chan *reader.ServerContent, len(servers))
 		var wg sync.WaitGroup
 
-		for i, server := range servers {
+		// remove `/managed` and pass through as `/logs` with any query parameters present
+		endpoint := strings.Replace(r.URL.Path, "/managed", "", 1)
+		if rawQuery := r.URL.RawQuery; rawQuery != "" {
+			endpoint += "?" + rawQuery
+		}
+
+		for _, server := range servers {
 			wg.Add(1)
-			go func(i int, server string) {
+			go func(server string) {
 				defer wg.Done()
-				// removed `/manage` and pass through as `/logs` with any query parameters present
-				url := "http://" + server + ":8080" + strings.Replace(r.URL.Path, "/managed", "", 1)
-				if rawQuery := r.URL.RawQuery; rawQuery != "" {
-					url += "?" + rawQuery
-				}
+				url := "http://" + server + ":8080" + endpoint
 				resp, err := http.Get(url)
 				if err != nil {
 					logrus.Errorf("Error calling server %s: %v", server, err)
@@ -83,14 +85,20 @@ func createManagedLogsHandler() http.HandlerFunc {
 					logrus.Errorf("Error decoding response from server %s: %v", server, err)
 					return
 				}
-
-				mu.Lock()
-
-				results[i] = &reader.ServerContent{HostName: server, Files: fileContents}
-				mu.Unlock()
-			}(i, server)
+				resultsChan <- &reader.ServerContent{HostName: server, Files: fileContents}
+			}(server)
 		}
-		wg.Wait()
+
+		go func() {
+			wg.Wait()
+			close(resultsChan)
+		}()
+
+		// collect results from the servers
+		var results []*reader.ServerContent
+		for result := range resultsChan {
+			results = append(results, result)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		if len(results) == 0 {
