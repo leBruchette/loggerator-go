@@ -192,6 +192,7 @@ func readLinesReverse(file *os.File, lineCount int, searchText string) ([]string
 		n, err := file.Read(buffer[:toRead])
 		if err != nil {
 			log.Fatalf("failed to read file: %v", err)
+
 		}
 		bufferText := buffer[:n]
 		// Handling partial lines at the edges
@@ -210,8 +211,10 @@ func readLinesReverse(file *os.File, lineCount int, searchText string) ([]string
 		for scanner.Scan() {
 			//filter out empty lines
 			currLine := scanner.Text()
-			if nonBlankLineOrContainsSearchText(currLine, searchText) {
-				tempLines = append(tempLines, currLine)
+			// Remove null characters from the line
+			currLineWithoutNullChar := strings.ReplaceAll(currLine, "\u0000", "")
+			if nonBlankLineOrContainsSearchText(currLineWithoutNullChar, searchText) {
+				tempLines = append(tempLines, currLineWithoutNullChar)
 			}
 		}
 		if err := scanner.Err(); err != nil {
