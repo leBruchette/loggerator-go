@@ -1,0 +1,148 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"loggerator-go/reader"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"testing"
+	"time"
+)
+
+var testDataDir = "testdata"
+
+func Test_200_GET_logs_10_lines(t *testing.T) {
+	filePath, err := createTestLogFile(testDataDir)
+	require.NoError(t, err)
+	defer func() {
+		os.Remove(filePath)
+		os.Remove(testDataDir)
+	}()
+
+	fileReader := reader.NewReader(testDataDir)
+	handler := CreateLogsHandler(fileReader)
+
+	req, err := http.NewRequest("GET", "/logs?lines=10", nil)
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	var response map[string]reader.FileContent
+	err = json.NewDecoder(rr.Body).Decode(&response)
+	assert.NoError(t, err)
+
+	assert.Equal(t, 1, len(response))
+	assert.Contains(t, response, filePath)
+	assert.Equal(t, 10, len(response[filePath].Content))
+	assert.Contains(t, response[filePath].Content[0], "Log line 25")
+	assert.Contains(t, response[filePath].Content[1], "Log line 24")
+	assert.Contains(t, response[filePath].Content[2], "Log line 23")
+	assert.Contains(t, response[filePath].Content[3], "Log line 22")
+	assert.Contains(t, response[filePath].Content[4], "Log line 21")
+	assert.Contains(t, response[filePath].Content[5], "Log line 20")
+	assert.Contains(t, response[filePath].Content[6], "Log line 19")
+	assert.Contains(t, response[filePath].Content[7], "Log line 18")
+	assert.Contains(t, response[filePath].Content[8], "Log line 17")
+	assert.Contains(t, response[filePath].Content[9], "Log line 16")
+}
+
+func Test_200_GET_logs_non_numeric_lines(t *testing.T) {
+	filePath, err := createTestLogFile(testDataDir)
+	require.NoError(t, err)
+	defer func() {
+		os.Remove(filePath)
+		os.Remove(testDataDir)
+	}()
+
+	req, err := http.NewRequest("GET", "/logs?lines=invalid", nil)
+	require.NoError(t, err)
+
+	fileReader := reader.NewReader(testDataDir)
+	handler := CreateLogsHandler(fileReader)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	var response map[string]reader.FileContent
+	err = json.NewDecoder(rr.Body).Decode(&response)
+	assert.NoError(t, err)
+
+	assert.Equal(t, 1, len(response))
+	assert.Contains(t, response, filePath)
+	assert.Equal(t, 20, len(response[filePath].Content))
+	assert.Contains(t, response[filePath].Content[0], "Log line 25")
+	assert.Contains(t, response[filePath].Content[19], "Log line 6")
+}
+
+func Test_200_GET_logs_all_lines(t *testing.T) {
+	filePath, err := createTestLogFile(testDataDir)
+	require.NoError(t, err)
+	defer func() {
+		os.Remove(filePath)
+		os.Remove(testDataDir)
+	}()
+
+	fileReader := reader.NewReader(testDataDir)
+	handler := CreateLogsHandler(fileReader)
+
+	req, err := http.NewRequest("GET", "/logs?lines=-1", nil)
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	var response map[string]reader.FileContent
+	err = json.NewDecoder(rr.Body).Decode(&response)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(response))
+	assert.Equal(t, 25, len(response[filePath].Content))
+	assert.Contains(t, response[filePath].Content[0], "Log line 25")
+	assert.Contains(t, response[filePath].Content[24], "Log line 1")
+}
+
+func Test_500_GET_logs_invalid_directory(t *testing.T) {
+	fileReader := reader.NewReader("invalid")
+	handler := CreateLogsHandler(fileReader)
+
+	req, err := http.NewRequest("GET", "/logs?lines=-1", nil)
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	assert.Contains(t, rr.Body.String(), "no such file or directory")
+}
+
+func createTestLogFile(dir string) (string, error) {
+	err := os.MkdirAll(dir, 0755)
+	if err != nil {
+		return "", err
+	}
+
+	filePath := dir + "/test.log"
+	file, err := os.Create(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	for i := 0; i < 25; i++ {
+		timestamp := time.Now().Add(time.Duration(i) * time.Second).Format(time.RFC3339)
+		_, err := file.WriteString(fmt.Sprintf("%s Log line %d\n", timestamp, i+1))
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return filePath, nil
+}
