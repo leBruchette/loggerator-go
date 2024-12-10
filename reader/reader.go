@@ -75,7 +75,6 @@ func (r *Reader) GetLogFileContent(lineCount int, excluded string, searchText st
 				path := filepath.Join(r.Dir, file.Name())
 				f, err := os.Open(path)
 				if err != nil {
-
 					fileContents <- FileContent{Name: r.Dir + "/" + file.Name(), Err: err}
 					return
 				}
