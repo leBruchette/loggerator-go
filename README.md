@@ -4,15 +4,18 @@ Loggerator-Go is a Go-based application for reading and processing log files. It
 
 ## Features
 
-- Read log files from a specified directory
 - Retrieve log file contents via an HTTP API
+- Reads log files from a specified directory in most recent order
+  - defaults to `/var/log`, may be overridden by setting the `LOG_DIR` environment variable
 - Filter log files by extensions
-- Handle non-readable files and empty directories
-- Reverse read lines from log files
+- Handles non-readable files and empty files and directories
 
 ## Requirements
 
 - Go 1.18 or later
+- Make
+
+## Dependencies
 - `github.com/go-chi/chi/v5` - simple, fast, and idiomatic router
 - `github.com/sirupsen/logrus` - structured, pluggable logging for Go
 - `github.com/stretchr/testify` - testing toolkit
@@ -30,22 +33,18 @@ Loggerator-Go is a Go-based application for reading and processing log files. It
     go mod tidy
     ```
 
-## Usage
+## Starting the Server
+1. Run the server using the following command:
+     ```sh
+      make run-server
+     ```
 
-1. Set the `LOG_DIR` environment variable to the directory containing your log files. If not set, it defaults to `/var/log`.
-
-2. Run the application:
+2. Access the API at `http://localhost:8080`, for example
     ```sh
-    go run main.go
-    ```
-
-3. Access the logs via the HTTP API:
-    ```sh
-    curl http://localhost:8080/logs
+      curl http://localhost:8080/logs
     ```
 
 ## API Endpoints
-
 ### GET /logs
 
 Retrieve log file contents.
@@ -66,9 +65,9 @@ curl "http://localhost:8080/logs?lines=10&excludedFileTypes=.log,.txt"
 ## Testing
 Run the tests using the following command:
 ```sh
-go test ./...
+  make test
 ```
-Add `-cover` to generate a coverage report:
+To run the tests with coverage and generate a coverage report, use the following command:
 ```sh
-go test -cover ./...
+  make test-coverage
 ```

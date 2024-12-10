@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	StartServer(createFileReader())
+	startServer(createFileReader())
 }
 
 func createFileReader() *reader.Reader {
@@ -24,7 +24,7 @@ func createFileReader() *reader.Reader {
 	return reader.NewReader(logDir)
 }
 
-func StartServer(fileReader *reader.Reader) {
+func startServer(fileReader *reader.Reader) {
 	r := chi.NewRouter()
 	r.Get("/logs", createLogsHandler(fileReader))
 
@@ -70,8 +70,9 @@ func parseLinesParameter(r *http.Request) int {
 	return linesToRead
 }
 
-func transformOutput(w http.ResponseWriter, err error, fileContents map[string]reader.FileContent) {
+func transformOutput(w http.ResponseWriter, err error, fileContents []reader.FileContent) {
 	w.Header().Set("Content-Type", "application/json")
+
 	err = json.NewEncoder(w).Encode(fileContents)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -15,7 +16,7 @@ import (
 )
 
 type FileContent struct {
-	Name     string    `json:"-"` // we'll map by Dir+filename, exclude from JSON in response
+	Name     string    `json:"fileName"`
 	Size     int64     `json:"fileSizeBytes"`
 	Modified time.Time `json:"lastModified"`
 	Content  []string  `json:"content,omitempty"`
@@ -45,7 +46,7 @@ func isExcluded(fileType string, excludedFileTypes string) bool {
 	return false
 }
 
-func (r *Reader) GetLogFileContent(lineCount int, excluded string) (map[string]FileContent, error) {
+func (r *Reader) GetLogFileContent(lineCount int, excluded string) ([]FileContent, error) {
 
 	// reads all files in the directory
 	fileInfos, err := getFilesInDirectory(r)
@@ -70,7 +71,7 @@ func (r *Reader) GetLogFileContent(lineCount int, excluded string) (map[string]F
 				f, err := os.Open(path)
 				if err != nil {
 
-					fileContents <- FileContent{Name: file.Name(), Err: err}
+					fileContents <- FileContent{Name: r.Dir + "/" + file.Name(), Err: err}
 					return
 				}
 				defer f.Close()
@@ -78,7 +79,7 @@ func (r *Reader) GetLogFileContent(lineCount int, excluded string) (map[string]F
 				var readableContent []string
 				readableContent = readLinesReverse(f, lineCount)
 				fileContents <- FileContent{
-					Name:     file.Name(),
+					Name:     r.Dir + "/" + file.Name(),
 					Size:     file.Size(),
 					Modified: file.ModTime().UTC(),
 					Content:  readableContent,
@@ -94,11 +95,17 @@ func (r *Reader) GetLogFileContent(lineCount int, excluded string) (map[string]F
 		close(fileContents)
 	}()
 
-	contents := make(map[string]FileContent)
+	var sortedContents []FileContent
 	for content := range fileContents {
-		contents[r.Dir+"/"+content.Name] = content
+		sortedContents = append(sortedContents, content)
 	}
-	return contents, nil
+
+	// Sort the contents by Modified time
+	sort.Slice(sortedContents, func(i, j int) bool {
+		return sortedContents[i].Modified.After(sortedContents[j].Modified)
+	})
+
+	return sortedContents, nil
 }
 
 func getFilesInDirectory(r *Reader) ([]os.FileInfo, error) {
