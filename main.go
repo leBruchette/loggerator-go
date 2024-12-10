@@ -10,6 +10,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -47,7 +48,12 @@ func createStatusHandler() http.HandlerFunc {
 
 func createManagedLogsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		servers := []string{"server1.example.com", "server2.example.com"} // List of other servers
+		servers := []string{"ec2-18-216-75-163.us-east-2.compute.amazonaws.com",
+			"ec2-18-118-0-92.us-east-2.compute.amazonaws.com",
+			"ec2-3-136-20-197.us-east-2.compute.amazonaws.com",
+			"ec2-3-142-172-190.us-east-2.compute.amazonaws.com",
+			"ec2-3-145-104-182.us-east-2.compute.amazonaws.com",
+		}
 		results := make(map[string][]reader.FileContent)
 		var mu sync.Mutex
 		var wg sync.WaitGroup
@@ -56,7 +62,12 @@ func createManagedLogsHandler() http.HandlerFunc {
 			wg.Add(1)
 			go func(server string) {
 				defer wg.Done()
-				resp, err := http.Get("http://" + server + ":8080/" + r.URL.Path)
+				// removed `/manage` and pass through as `/logs` with any query parameters present
+				url := "http://" + server + ":8080" + strings.Replace(r.URL.Path, "/managed", "", 1)
+				if rawQuery := r.URL.RawQuery; rawQuery != "" {
+					url += "?" + rawQuery
+				}
+				resp, err := http.Get(url)
 				if err != nil {
 					logrus.Errorf("Error calling server %s: %v", server, err)
 					return
@@ -78,6 +89,9 @@ func createManagedLogsHandler() http.HandlerFunc {
 		wg.Wait()
 
 		w.Header().Set("Content-Type", "application/json")
+		if len(results) == 0 {
+			http.ResponseWriter.WriteHeader(w, http.StatusNoContent)
+		}
 		if err := json.NewEncoder(w).Encode(results); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
