@@ -1,6 +1,6 @@
-# Loggerator-Go
+# loggerator-go
 
-Loggerator-Go is a Go-based application for reading and processing log files. It provides an HTTP API to retrieve log file contents, with support for filtering and handling various edge cases.
+loggerator-go is an application written in Golang for reading and processing log files. It provides an HTTP API to retrieve log file contents, with support for filtering and handling various edge cases.
 
 ## Features
 
@@ -12,7 +12,7 @@ Loggerator-Go is a Go-based application for reading and processing log files. It
 
 ## Requirements
 
-- Go 1.18 or later
+- Go 1.23 or later
 - Make
 
 ## Dependencies
@@ -54,12 +54,13 @@ Retrieve log file contents.
 - `lines` (optional): Number of lines to read from each log file. 
   - If not provided or invalid, defaults to 20. 
   - If set to -1, all lines are read.
+- `search`: A search term to filter log lines. Only lines containing the search term will be returned.
 - `excludedFileTypes` (optional): Comma-separated list of file extensions to exclude.
 
 #### Example
 
 ```sh
-curl "http://localhost:8080/logs?lines=10&excludedFileTypes=.log,.txt"
+  curl "http://localhost:8080/logs?lines=10&search=error&excludedFileTypes=.log,.txt"
 ```
 
 ## Testing

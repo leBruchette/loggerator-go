@@ -38,8 +38,10 @@ func createLogsHandler(fileReader *reader.Reader) http.HandlerFunc {
 		linesToRead := parseLinesParameter(r)
 		// comma-separated list of file extensions to exclude
 		excludedFileTypes := r.URL.Query().Get("excludedFileTypes")
+		// search text to filter log lines
+		searchText := r.URL.Query().Get("search")
 
-		fileContents, err := fileReader.GetLogFileContent(linesToRead, excludedFileTypes)
+		fileContents, err := fileReader.GetLogFileContent(linesToRead, excludedFileTypes, searchText)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

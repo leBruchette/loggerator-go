@@ -15,9 +15,14 @@ import (
 	"unicode/utf8"
 )
 
+const (
+	UnreadableFileMessage = "File is not human-readable"
+)
+
 type FileContent struct {
 	Name     string    `json:"fileName"`
 	Size     int64     `json:"fileSizeBytes"`
+	Utf8     bool      `json:"isUtf8"`
 	Modified time.Time `json:"lastModified"`
 	Content  []string  `json:"content,omitempty"`
 	Err      error     `json:"error,omitempty"`
@@ -46,7 +51,7 @@ func isExcluded(fileType string, excludedFileTypes string) bool {
 	return false
 }
 
-func (r *Reader) GetLogFileContent(lineCount int, excluded string) ([]FileContent, error) {
+func (r *Reader) GetLogFileContent(lineCount int, excluded string, searchText string) ([]FileContent, error) {
 
 	// reads all files in the directory
 	fileInfos, err := getFilesInDirectory(r)
@@ -77,13 +82,17 @@ func (r *Reader) GetLogFileContent(lineCount int, excluded string) ([]FileConten
 				defer f.Close()
 
 				var readableContent []string
-				readableContent = readLinesReverse(f, lineCount)
-				fileContents <- FileContent{
-					Name:     r.Dir + "/" + file.Name(),
-					Size:     file.Size(),
-					Modified: file.ModTime().UTC(),
-					Content:  readableContent,
-					Err:      nil,
+				readableContent, isUtf8 := readLinesReverse(f, lineCount, searchText)
+				// readableContent will be empty if a search term is not found, so don't return the file in the list
+				if len(readableContent) > 0 {
+					fileContents <- FileContent{
+						Name:     r.Dir + "/" + file.Name(),
+						Size:     file.Size(),
+						Utf8:     isUtf8,
+						Modified: file.ModTime().UTC(),
+						Content:  readableContent,
+						Err:      nil,
+					}
 				}
 			}(file)
 		}
@@ -97,6 +106,12 @@ func (r *Reader) GetLogFileContent(lineCount int, excluded string) ([]FileConten
 
 	var sortedContents []FileContent
 	for content := range fileContents {
+		// don't return non-readable results if a search term is provided
+		// just to narrow-down any compressed files that shouldn't be returned if a user is looking for a specific term
+		// perhaps compressed files should be ignored altogether?
+		if !content.Utf8 && len(searchText) > 0 {
+			continue
+		}
 		sortedContents = append(sortedContents, content)
 	}
 
@@ -141,7 +156,7 @@ func isHumanReadable(content []byte) bool {
 	return true
 }
 
-func readLinesReverse(file *os.File, lineCount int) []string {
+func readLinesReverse(file *os.File, lineCount int, searchText string) ([]string, bool) {
 	const bufferSize = 4096
 	stat, err := file.Stat()
 	if err != nil {
@@ -163,7 +178,7 @@ func readLinesReverse(file *os.File, lineCount int) []string {
 	// Read the first part of the file to check if it's human-readable
 	// if not, return a slice with a relevant message
 	if !isHumanReadable(buffer[:initialReadSize]) {
-		return []string{"File is not human-readable"}
+		return []string{UnreadableFileMessage}, false
 	}
 
 	var lines []string
@@ -195,7 +210,7 @@ func readLinesReverse(file *os.File, lineCount int) []string {
 		for scanner.Scan() {
 			//filter out empty lines
 			currLine := scanner.Text()
-			if len(currLine) > 0 {
+			if nonBlankLineOrContainsSearchText(currLine, searchText) {
 				tempLines = append(tempLines, currLine)
 			}
 		}
@@ -211,5 +226,9 @@ func readLinesReverse(file *os.File, lineCount int) []string {
 		}
 	}
 
-	return lines
+	return lines, true
+}
+
+func nonBlankLineOrContainsSearchText(currLine string, searchText string) bool {
+	return len(currLine) > 0 && (len(searchText) == 0 || strings.Contains(currLine, searchText))
 }
