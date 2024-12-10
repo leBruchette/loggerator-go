@@ -10,6 +10,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"sync"
 )
 
 func main() {
@@ -30,6 +31,7 @@ func startServer(fileReader *reader.Reader) {
 	r := chi.NewRouter()
 	r.Get("/status", createStatusHandler())
 	r.Get("/logs", createLogsHandler(fileReader))
+	r.Get("/managed/logs", createManagedLogsHandler())
 
 	logrus.Info("Server listening on port 8080...")
 	http.ListenAndServe(":8080", r)
@@ -37,7 +39,48 @@ func startServer(fileReader *reader.Reader) {
 
 func createStatusHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		logrus.Info("Received status request")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	}
+}
+
+func createManagedLogsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		servers := []string{"server1.example.com", "server2.example.com"} // List of other servers
+		results := make(map[string][]reader.FileContent)
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+
+		for _, server := range servers {
+			wg.Add(1)
+			go func(server string) {
+				defer wg.Done()
+				resp, err := http.Get("http://" + server + ":8080/" + r.URL.Path)
+				if err != nil {
+					logrus.Errorf("Error calling server %s: %v", server, err)
+					return
+				}
+				defer resp.Body.Close()
+
+				var fileContents []reader.FileContent
+				if err := json.NewDecoder(resp.Body).Decode(&fileContents); err != nil {
+					logrus.Errorf("Error decoding response from server %s: %v", server, err)
+					return
+				}
+
+				mu.Lock()
+				results[server] = fileContents
+				mu.Unlock()
+			}(server)
+		}
+
+		wg.Wait()
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(results); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
 }
 
