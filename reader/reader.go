@@ -19,6 +19,11 @@ const (
 	UnreadableFileMessage = "File is not human-readable"
 )
 
+type ServerContent struct {
+	HostName string        `json:"hostname"`
+	Files    []FileContent `json:"files"`
+}
+
 type FileContent struct {
 	Name     string    `json:"fileName"`
 	Size     int64     `json:"fileSizeBytes"`
