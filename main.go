@@ -50,19 +50,21 @@ func createStatusHandler() http.HandlerFunc {
 // e.g curl --location 'http://ec2-18-117-92-75.us-east-2.compute.amazonaws.com:8080/managed/logs'
 func createManagedLogsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		servers := []string{"ec2-18-216-75-163.us-east-2.compute.amazonaws.com",
+		servers := []string{
+			"ec2-18-216-75-163.us-east-2.compute.amazonaws.com",
 			"ec2-18-118-0-92.us-east-2.compute.amazonaws.com",
 			"ec2-3-136-20-197.us-east-2.compute.amazonaws.com",
 			"ec2-3-142-172-190.us-east-2.compute.amazonaws.com",
 			"ec2-3-145-104-182.us-east-2.compute.amazonaws.com",
 		}
-		results := make(map[string][]reader.FileContent)
+
+		results := make([]*reader.ServerContent, len(servers))
 		var mu sync.Mutex
 		var wg sync.WaitGroup
 
-		for _, server := range servers {
+		for i, server := range servers {
 			wg.Add(1)
-			go func(server string) {
+			go func(i int, server string) {
 				defer wg.Done()
 				// removed `/manage` and pass through as `/logs` with any query parameters present
 				url := "http://" + server + ":8080" + strings.Replace(r.URL.Path, "/managed", "", 1)
@@ -83,11 +85,11 @@ func createManagedLogsHandler() http.HandlerFunc {
 				}
 
 				mu.Lock()
-				results[server] = fileContents
-				mu.Unlock()
-			}(server)
-		}
 
+				results[i] = &reader.ServerContent{HostName: server, Files: fileContents}
+				mu.Unlock()
+			}(i, server)
+		}
 		wg.Wait()
 
 		w.Header().Set("Content-Type", "application/json")
