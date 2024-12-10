@@ -36,16 +36,16 @@ loggerator-go is an application written in Golang for reading and processing log
 ## Starting the Server
 1. Run the server using the following command:
      ```sh
-      make run-server
+     make run-server
      ```
 
 2. Access the API at `http://localhost:8080`, for example
     ```sh
-      curl http://localhost:8080/logs
+    curl http://localhost:8080/logs
     ```
 
 ## API Endpoints
-### GET /logs
+### GET `/logs`
 
 Retrieve log file contents.
 
@@ -62,6 +62,37 @@ Retrieve log file contents.
 ```sh
   curl "http://localhost:8080/logs?lines=10&search=error&excludedFileTypes=.log,.txt"
 ```
+
+### GET `/status`
+
+Retrieve the server status.  This was meant for future (unimplemented) health checks from a main logging aggregation server
+
+## BONUS ENDPOINT 
+### GET `/managed/logs`
+Retrieves logs from a list of servers.  Works the same as `/logs` but under-the-hood this request is delegated to a list of servers whic all contain the `/logs` endpoint
+
+
+Still a WIP (no tests, server terraform isn't 100%); the endpoint is currently available at http://ec2-18-117-92-75.us-east-2.compute.amazonaws.com:8080/managed/logs
+```sh
+  curl http://ec2-18-117-92-75.us-east-2.compute.amazonaws.com:8080/managed/logs
+```
+
+This endpoint uses goroutines to concurrently fetch logs from the servers in the list.  The list of servers is currently hardcoded to five other ubuntu servers in AWS:
+```go
+servers := []string{
+    "ec2-18-216-75-163.us-east-2.compute.amazonaws.com",
+    "ec2-18-118-0-92.us-east-2.compute.amazonaws.com",
+    "ec2-3-136-20-197.us-east-2.compute.amazonaws.com",
+    "ec2-3-142-172-190.us-east-2.compute.amazonaws.com",
+    "ec2-3-145-104-182.us-east-2.compute.amazonaws.com",
+}
+```
+Results are in a similar structure to the `/logs` endpoint, but wrapped in an object keyed by the servers' hostname
+
+![managed-screenshot.png](readme/managed-screenshot.png)
+
+The changes for this endpoint are in the `feat/log-aggregation` branch
+
 
 ## Testing
 Run the tests using the following command:
