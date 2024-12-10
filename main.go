@@ -46,6 +46,8 @@ func createStatusHandler() http.HandlerFunc {
 	}
 }
 
+// the main, aggregation server that queries the managed server is ec2-18-117-92-75.us-east-2.compute.amazonaws.com
+// e.g curl --location 'http://ec2-18-117-92-75.us-east-2.compute.amazonaws.com:8080/managed/logs'
 func createManagedLogsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		servers := []string{"ec2-18-216-75-163.us-east-2.compute.amazonaws.com",
