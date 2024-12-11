@@ -80,11 +80,11 @@ Still a WIP (no tests, server terraform isn't 100%); the endpoint is currently a
 This endpoint uses goroutines to concurrently fetch logs from the servers in the list.  The list of servers is currently hardcoded to five other ubuntu servers in AWS:
 ```go
 servers := []string{
-    "ec2-3-147-61-154.us-east-2.compute.amazonaws.com",
-    "ec2-18-224-140-50.us-east-2.compute.amazonaws.com",
-    "ec2-3-16-23-61.us-east-2.compute.amazonaws.com",
-    "ec2-3-144-37-137.us-east-2.compute.amazonaws.com",
-    "ec2-3-17-11-20.us-east-2.compute.amazonaws.com",
+    "ec2-3-16-68-44.us-east-2.compute.amazonaws.com",
+    "ec2-18-216-228-175.us-east-2.compute.amazonaws.com",
+    "ec2-18-219-82-204.us-east-2.compute.amazonaws.com",
+    "ec2-3-149-240-26.us-east-2.compute.amazonaws.com",
+    "ec2-18-218-59-86.us-east-2.compute.amazonaws.com",
 }
 ```
 Results are in a similar structure to the `/logs` endpoint, but wrapped in an object containing `hostname`
