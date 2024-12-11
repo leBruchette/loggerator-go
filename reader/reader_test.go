@@ -111,6 +111,32 @@ func Test_GetLogFileContent_HandlesNonReadableFiles(t *testing.T) {
 	assert.Equal(t, UnreadableFileMessage, contents[0].Content[0])
 }
 
+func Test_GetLogFileContent_HandlesSearchText(t *testing.T) {
+	r := NewReader(LogFileDir)
+	contents, err := r.GetLogFileContent(2, EmptyExclusionList, "Log")
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, len(contents))
+	// testLogFile
+	assert.Equal(t, "testdata/file.log", contents[0].Name)
+	assert.Equal(t, 2, len(contents[0].Content))
+	assert.Contains(t, contents[0].Content[0], "Log line 25")
+	assert.Contains(t, contents[0].Content[1], "Log line 24")
+}
+
+func Test_GetLogFileContent_HandlesSearchText_CaseInsensitive(t *testing.T) {
+	r := NewReader(LogFileDir)
+	contents, err := r.GetLogFileContent(2, EmptyExclusionList, "log")
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, len(contents))
+	// testLogFile
+	assert.Equal(t, "testdata/file.log", contents[0].Name)
+	assert.Equal(t, 2, len(contents[0].Content))
+	assert.Contains(t, contents[0].Content[0], "Log line 25")
+	assert.Contains(t, contents[0].Content[1], "Log line 24")
+}
+
 func Test_GetLogFileContent_ErrorsOnNonExistentDirectory(t *testing.T) {
 	r := NewReader("imnothere")
 	_, err := r.GetLogFileContent(5, EmptyExclusionList, "")

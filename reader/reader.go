@@ -52,7 +52,7 @@ func isExcluded(fileType string, excludedFileTypes string) bool {
 
 func (r *Reader) GetLogFileContent(lineCount int, excluded string, searchText string) ([]FileContent, error) {
 	// reads all files in the directory
-	fileInfos, err := getFilesInDirectory(r)
+	fileInfos, err := getFilesInDirectory(r, excluded)
 	if err != nil {
 		return nil, err
 	}
@@ -63,40 +63,41 @@ func (r *Reader) GetLogFileContent(lineCount int, excluded string, searchText st
 
 	// filter out directories and fileInfo extensions to exclude
 	for _, fileInfo := range fileInfos {
-		if !fileInfo.IsDir() && !isExcluded(filepath.Ext(fileInfo.Name()), excluded) {
-			// increment the number of goroutines to wait for
-			wg.Add(1)
+		// increment the number of goroutines to wait for
+		wg.Add(1)
 
-			// perform fileInfo manipulation within a goroutine
-			go func(file os.FileInfo) {
-				defer wg.Done()
-				path := filepath.Join(r.Dir, file.Name())
-				f, err := os.Open(path)
-				if err != nil {
-					fileContents <- FileContent{Name: r.Dir + "/" + file.Name(), Err: err}
-					return
-				}
-				defer f.Close()
+		// perform fileInfo manipulation within a goroutine
+		go func(file os.FileInfo) {
+			defer wg.Done()
+			path := filepath.Join(r.Dir, file.Name())
+			// see if the file is readable, if not, return the error in FileContent
+			f, err := os.Open(path)
+			if err != nil {
+				fileContents <- FileContent{Name: r.Dir + "/" + file.Name(), Err: err}
+				return
+			}
+			defer f.Close()
 
-				var readableContent []string
-				readableContent, isUtf8, err := readLinesInReverse(f, lineCount, searchText)
-				if err != nil {
-					fileContents <- FileContent{Name: r.Dir + "/" + file.Name(), Err: err}
-					return
+			var readableContent []string
+			readableContent, isUtf8, err := readLinesInReverse(f, lineCount, searchText)
+			if err != nil {
+				fileContents <- FileContent{Name: r.Dir + "/" + file.Name(), Err: err}
+				return
+			}
+
+			// readableContent will be empty if a search term is not found, so don't return the fileInfo in the list
+			if len(readableContent) > 0 {
+				fileContents <- FileContent{
+					Name:     r.Dir + "/" + file.Name(),
+					Size:     file.Size(),
+					Utf8:     isUtf8,
+					Modified: file.ModTime().UTC(),
+					Content:  readableContent,
+					Err:      nil,
 				}
-				// readableContent will be empty if a search term is not found, so don't return the fileInfo in the list
-				if len(readableContent) > 0 {
-					fileContents <- FileContent{
-						Name:     r.Dir + "/" + file.Name(),
-						Size:     file.Size(),
-						Utf8:     isUtf8,
-						Modified: file.ModTime().UTC(),
-						Content:  readableContent,
-						Err:      nil,
-					}
-				}
-			}(fileInfo)
-		}
+			}
+		}(fileInfo)
+
 	}
 
 	// close the channel once all goroutines are done
@@ -107,8 +108,8 @@ func (r *Reader) GetLogFileContent(lineCount int, excluded string, searchText st
 
 	var sortedContents []FileContent
 	for content := range fileContents {
-		// don't return non-readable results if a search term is provided
-		// just to narrow-down any compressed files that shouldn't be returned if a user is looking for a specific term
+		// don't return non-readable results if a search term is provided just to narrow-down any compressed files
+		// that shouldn't be returned if a user is looking for a specific term
 		// perhaps compressed files should be ignored altogether?
 		if !content.Utf8 && len(searchText) > 0 {
 			continue
@@ -124,7 +125,7 @@ func (r *Reader) GetLogFileContent(lineCount int, excluded string, searchText st
 	return sortedContents, nil
 }
 
-func getFilesInDirectory(r *Reader) ([]os.FileInfo, error) {
+func getFilesInDirectory(r *Reader, excluded string) ([]os.FileInfo, error) {
 	entries, err := os.ReadDir(r.Dir)
 	if err != nil {
 		logrus.Error(err)
@@ -133,7 +134,7 @@ func getFilesInDirectory(r *Reader) ([]os.FileInfo, error) {
 
 	var fileInfos []os.FileInfo
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if !entry.IsDir() && !isExcluded(filepath.Ext(entry.Name()), excluded) {
 			info, err := entry.Info()
 			if err != nil {
 				// don't fail everything because of one bad file...
@@ -221,5 +222,5 @@ func readLinesInReverse(file *os.File, lineCount int, searchText string) ([]stri
 }
 
 func nonBlankLineOrContainsSearchText(currLine string, searchText string) bool {
-	return len(currLine) > 0 && (len(searchText) == 0 || strings.Contains(currLine, searchText))
+	return len(currLine) > 0 && (len(searchText) == 0 || strings.Contains(strings.ToLower(currLine), strings.ToLower(searchText)))
 }
