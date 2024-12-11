@@ -51,11 +51,11 @@ func createStatusHandler() http.HandlerFunc {
 func createManagedLogsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		servers := []string{
-			"ec2-3-12-136-72.us-east-2.compute.amazonaws.com",
-			"ec2-3-136-108-93.us-east-2.compute.amazonaws.com",
-			"ec2-18-222-182-50.us-east-2.compute.amazonaws.com",
-			"ec2-3-144-251-67.us-east-2.compute.amazonaws.com",
-			"ec2-18-218-117-68.us-east-2.compute.amazonaws.com",
+			"ec2-3-145-12-52.us-east-2.compute.amazonaws.com",
+			"ec2-18-117-145-125.us-east-2.compute.amazonaws.com",
+			"ec2-18-116-42-100.us-east-2.compute.amazonaws.com",
+			"ec2-3-145-167-96.us-east-2.compute.amazonaws.com",
+			"ec2-3-133-137-109.us-east-2.compute.amazonaws.com",
 		}
 
 		// channel for receiving results from the servers
