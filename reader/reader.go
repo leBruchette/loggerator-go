@@ -210,8 +210,11 @@ func readLinesInReverse(file *os.File, lineCount int, searchText string) ([]stri
 	}
 
 	// Add the last left over line if we still need more lines, but make sure it's not a blank line or doesn't contain the search text if provided
-	if len(leftOver) > 0 && len(lines) < lineCount && nonBlankLineOrContainsSearchText(string(leftOver), searchText) {
-		lines = append(lines, string(leftOver))
+	if len(leftOver) > 0 && len(lines) < lineCount {
+		sanitizedLine := strings.ReplaceAll(string(leftOver), "\u0000", "")
+		if nonBlankLineOrContainsSearchText(sanitizedLine, searchText) {
+			lines = append(lines, string(leftOver))
+		}
 	}
 
 	return lines, true, nil
