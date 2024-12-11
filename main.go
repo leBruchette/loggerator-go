@@ -8,10 +8,12 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 )
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU()) // Use all available CPUs
 	startServer(createFileReader())
 }
 
