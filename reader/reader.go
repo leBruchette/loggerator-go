@@ -1,11 +1,9 @@
 package reader
 
 import (
-	"bufio"
 	"bytes"
 	"github.com/sirupsen/logrus"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -17,6 +15,7 @@ import (
 
 const (
 	UnreadableFileMessage = "File is not human-readable"
+	ChunkSize             = 1024 // Size of each chunk to read
 )
 
 type FileContent struct {
@@ -52,38 +51,40 @@ func isExcluded(fileType string, excludedFileTypes string) bool {
 }
 
 func (r *Reader) GetLogFileContent(lineCount int, excluded string, searchText string) ([]FileContent, error) {
-
 	// reads all files in the directory
 	fileInfos, err := getFilesInDirectory(r)
 	if err != nil {
 		return nil, err
 	}
 
-	// create a channel to receive file contents
+	// create a channel to receive fileInfo contents
 	fileContents := make(chan FileContent)
 	var wg sync.WaitGroup
 
-	// filter out directories and file extensions to exclude
-	for _, file := range fileInfos {
-		if !file.IsDir() && !isExcluded(filepath.Ext(file.Name()), excluded) {
+	// filter out directories and fileInfo extensions to exclude
+	for _, fileInfo := range fileInfos {
+		if !fileInfo.IsDir() && !isExcluded(filepath.Ext(fileInfo.Name()), excluded) {
 			// increment the number of goroutines to wait for
 			wg.Add(1)
 
-			// perform file manipulation within a goroutine
+			// perform fileInfo manipulation within a goroutine
 			go func(file os.FileInfo) {
 				defer wg.Done()
 				path := filepath.Join(r.Dir, file.Name())
 				f, err := os.Open(path)
 				if err != nil {
-
 					fileContents <- FileContent{Name: r.Dir + "/" + file.Name(), Err: err}
 					return
 				}
 				defer f.Close()
 
 				var readableContent []string
-				readableContent, isUtf8 := readLinesReverse(f, lineCount, searchText)
-				// readableContent will be empty if a search term is not found, so don't return the file in the list
+				readableContent, isUtf8, err := readLinesInReverse(f, lineCount, searchText)
+				if err != nil {
+					fileContents <- FileContent{Name: r.Dir + "/" + file.Name(), Err: err}
+					return
+				}
+				// readableContent will be empty if a search term is not found, so don't return the fileInfo in the list
 				if len(readableContent) > 0 {
 					fileContents <- FileContent{
 						Name:     r.Dir + "/" + file.Name(),
@@ -94,7 +95,7 @@ func (r *Reader) GetLogFileContent(lineCount int, excluded string, searchText st
 						Err:      nil,
 					}
 				}
-			}(file)
+			}(fileInfo)
 		}
 	}
 
@@ -156,80 +157,64 @@ func isHumanReadable(content []byte) bool {
 	return true
 }
 
-func readLinesReverse(file *os.File, lineCount int, searchText string) ([]string, bool) {
-	const bufferSize = 4096
-	stat, err := file.Stat()
+func readLinesInReverse(file *os.File, lineCount int, searchText string) ([]string, bool, error) {
+	defer file.Close()
+
+	fileStat, err := file.Stat()
 	if err != nil {
-		log.Fatalf("failed to get file info: %v", err)
-	}
-	fileSize := stat.Size()
-	buffer := make([]byte, bufferSize)
-
-	initialReadSize := bufferSize
-	if fileSize < int64(bufferSize) {
-		initialReadSize = int(fileSize)
+		return nil, false, err
 	}
 
-	// Fail fast if the file can't be read
-	_, err = file.ReadAt(buffer[:initialReadSize], 0)
-	if err != nil {
-		log.Fatalf("failed to read file: %v", err)
-	}
-	// Read the first part of the file to check if it's human-readable
-	// if not, return a slice with a relevant message
-	if !isHumanReadable(buffer[:initialReadSize]) {
-		return []string{UnreadableFileMessage}, false
-	}
-
+	fileSize := fileStat.Size()
+	buffer := make([]byte, ChunkSize)
 	var lines []string
-	for offset := fileSize; offset > 0; {
-		toRead := int64(bufferSize)
-		if offset < bufferSize {
-			toRead = offset
+	var leftOver []byte
+	for offset := fileSize; offset > 0 && len(lines) < lineCount; offset -= ChunkSize {
+		// Adjust chunk size for the first chunk if smaller than ChunkSize
+		if offset < ChunkSize {
+			buffer = make([]byte, offset)
 		}
-		offset -= toRead
-		file.Seek(offset, io.SeekStart)
-		n, err := file.Read(buffer[:toRead])
+
+		// Move the offset back to read the next chunk
+		_, err := file.Seek(offset-int64(len(buffer)), io.SeekStart)
 		if err != nil {
-			log.Fatalf("failed to read file: %v", err)
-
-		}
-		bufferText := buffer[:n]
-		// Handling partial lines at the edges
-		if len(lines) > 0 {
-			bufferText = append(bufferText, []byte(lines[0])...)
-			lines = lines[1:]
+			return nil, false, err
 		}
 
-		scanner := bufio.NewScanner(bytes.NewReader(bufferText))
-		// Create a 1MB slice to handle large lines
-		const maxCapacity = 1024 * 1024
-		buf := make([]byte, maxCapacity)
-		scanner.Buffer(buf, maxCapacity)
+		_, err = file.Read(buffer)
+		if err != nil {
+			return nil, false, err
+		}
 
-		var tempLines []string
-		for scanner.Scan() {
-			currLine := scanner.Text()
-			// Remove null characters from the line
-			currLineWithoutNullChar := strings.ReplaceAll(currLine, "\u0000", "")
-			//filter out empty lines
-			if nonBlankLineOrContainsSearchText(currLineWithoutNullChar, searchText) {
-				tempLines = append(tempLines, currLineWithoutNullChar)
-			}
+		if !isHumanReadable(buffer) {
+			return []string{UnreadableFileMessage}, false, nil
 		}
-		if err := scanner.Err(); err != nil {
-			log.Fatalf("error scanning file %v: %v", file.Name(), err)
+
+		// Combine leftover from previous chunk
+		combined := append(buffer, leftOver...)
+		linesInChunk := bytes.Split(combined, []byte("\n"))
+
+		// Keep the first part for next chunk
+		if offset != ChunkSize {
+			leftOver = linesInChunk[0]
+		} else {
+			leftOver = nil
 		}
-		// Reverse order of lines read in this iteration
-		for i := len(tempLines) - 1; i >= 0; i-- {
-			lines = append(lines, tempLines[i])
-			if len(lines) >= lineCount {
-				break
+
+		for i := len(linesInChunk) - 1; i > 0 && len(lines) < lineCount; i-- {
+			sanitizedLine := strings.ReplaceAll(string(linesInChunk[i]), "\u0000", "")
+			if nonBlankLineOrContainsSearchText(sanitizedLine, searchText) {
+				lines = append(lines, sanitizedLine)
 			}
 		}
 	}
 
-	return lines, true
+	// Add the last left over line if we still need more lines, but make sure it's not a blank line or doesn't contain the search text if provided
+	if len(leftOver) > 0 && len(lines) < lineCount && nonBlankLineOrContainsSearchText(string(leftOver), searchText) {
+		lines = append(lines, string(leftOver))
+	}
+
+	return lines, true, nil
 }
 
 func nonBlankLineOrContainsSearchText(currLine string, searchText string) bool {

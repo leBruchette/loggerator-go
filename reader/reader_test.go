@@ -40,7 +40,7 @@ func teardown() {
 		os.Remove(testLogFilePath)
 		os.Remove(gzippedFilePath)
 		os.Remove(emptyFilePath)
-		os.Chmod(restrictedFilePath, 0644)
+		os.Chmod(restrictedFilePath, 0777)
 		os.Remove(restrictedFilePath)
 		os.Remove(emptyDirPath)
 		os.Remove(testDataDir)
@@ -83,12 +83,12 @@ func Test_GetLogFileContent_ReturnsCorrectContent(t *testing.T) {
 
 func Test_GetLogFileContent_ExcludesSpecifiedFileExtensions(t *testing.T) {
 	r := NewReader(LogFileDir)
-	contents, err := r.GetLogFileContent(-1, ".gz", "")
+	contents, err := r.GetLogFileContent(5, ".gz", "")
 	require.NoError(t, err)
 
 	assert.Equal(t, 2, len(contents))
-	assert.Equal(t, contents[0].Name, "testdata/file.log")
-	assert.Equal(t, contents[1].Name, "testdata/restricted.log")
+	assert.Equal(t, "testdata/file.log", contents[0].Name)
+	assert.Equal(t, "testdata/restricted.log", contents[1].Name)
 }
 
 func Test_GetLogFileContent_HandlesEmptyDirectory(t *testing.T) {
